@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
         count: messages.length
       })
       
-    } catch (dbError) {
+    } catch (dbError: any) {
       console.error('Database error:', dbError)
       return NextResponse.json(
         { success: false, message: 'Database error occurred' },
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
         message: 'Session created successfully'
       })
       
-    } catch (dbError) {
+    } catch (dbError: any) {
       if (dbError.code === '23505') { // Unique constraint violation
         return NextResponse.json(
           { success: false, message: 'Session already exists' },
@@ -179,7 +179,7 @@ export async function DELETE(request: NextRequest) {
         sessionId: result.rows[0].session_id
       })
       
-    } catch (dbError) {
+    } catch (dbError: any) {
       console.error('Database error:', dbError)
       return NextResponse.json(
         { success: false, message: 'Database error occurred' },
