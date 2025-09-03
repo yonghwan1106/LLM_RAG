@@ -1,17 +1,41 @@
-import pdf from 'pdf-parse'
-
+// Dynamic import to avoid SSR issues
 export async function extractTextFromPDF(file: File): Promise<string> {
   try {
+    // Dynamic import of pdfjs-dist for server-side compatibility
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    
+    // Configure worker for server environment
+    if (typeof window === 'undefined') {
+      // Server-side: use local worker path
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/legacy/build/pdf.worker.min.js'
+    }
+    
     const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    const pdf = await pdfjsLib.getDocument({ 
+      data: arrayBuffer,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true
+    }).promise
     
-    const data = await pdf(buffer)
+    let fullText = ''
     
-    if (!data.text || data.text.trim().length === 0) {
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum)
+      const textContent = await page.getTextContent()
+      
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(' ')
+      
+      fullText += pageText + '\n\n'
+    }
+    
+    if (!fullText.trim()) {
       throw new Error('No text content found in PDF')
     }
     
-    return data.text.trim()
+    return fullText.trim()
   } catch (error) {
     console.error('Error extracting text from PDF:', error)
     throw new Error('Failed to extract text from PDF')
