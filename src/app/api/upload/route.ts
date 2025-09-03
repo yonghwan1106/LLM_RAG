@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/supabase'
 import { extractTextFromPDF, splitTextIntoChunks } from '@/lib/pdf'
 import { generateEmbedding } from '@/lib/openai'
 
@@ -33,64 +33,56 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Save document to database
-    console.log('Saving document to database...')
-    const { data: document, error: docError } = await supabase
-      .from('documents')
-      .insert({
-        filename: file.name,
-        content: text,
-      })
-      .select()
-      .single()
+    // Generate embedding for the entire document
+    console.log('Generating document embedding...')
+    const documentEmbedding = await generateEmbedding(text.substring(0, 8000)) // Limit text length for embedding
     
-    if (docError) {
-      console.error('Error saving document:', docError)
+    // Save document to database with embedding
+    console.log('Saving document to database...')
+    const client = await db.connect()
+    
+    try {
+      const documentResult = await client.query(
+        `INSERT INTO documents (title, content, source, metadata, embedding) 
+         VALUES ($1, $2, $3, $4, $5) 
+         RETURNING id, title, content, source, created_at`,
+        [
+          file.name, 
+          text, 
+          'pdf_upload',
+          JSON.stringify({
+            filename: file.name,
+            fileSize: file.size,
+            uploadedAt: new Date().toISOString()
+          }),
+          `[${documentEmbedding.join(',')}]` // PostgreSQL vector format
+        ]
+      )
+      
+      const document = documentResult.rows[0]
+    
+      console.log('Document processing completed successfully')
+      return NextResponse.json({
+        success: true,
+        document_id: document.id,
+        message: `Successfully processed document: ${file.name}`,
+        document: {
+          id: document.id,
+          title: document.title,
+          source: document.source,
+          created_at: document.created_at
+        }
+      })
+      
+    } catch (dbError) {
+      console.error('Database error:', dbError)
       return NextResponse.json(
-        { success: false, message: 'Failed to save document' },
+        { success: false, message: 'Database error occurred' },
         { status: 500 }
       )
+    } finally {
+      client.release()
     }
-    
-    // Split text into chunks
-    console.log('Splitting text into chunks...')
-    const chunks = splitTextIntoChunks(text)
-    
-    // Generate embeddings and save chunks
-    console.log(`Generating embeddings for ${chunks.length} chunks...`)
-    const chunkPromises = chunks.map(async (chunk, index) => {
-      try {
-        const embedding = await generateEmbedding(chunk)
-        
-        const { error: chunkError } = await supabase
-          .from('document_chunks')
-          .insert({
-            document_id: document.id,
-            content: chunk,
-            embedding: embedding,
-            chunk_index: index,
-          })
-        
-        if (chunkError) {
-          console.error('Error saving chunk:', chunkError)
-          throw chunkError
-        }
-        
-        return true
-      } catch (error) {
-        console.error(`Error processing chunk ${index}:`, error)
-        throw error
-      }
-    })
-    
-    await Promise.all(chunkPromises)
-    
-    console.log('Document processing completed successfully')
-    return NextResponse.json({
-      success: true,
-      document_id: document.id,
-      message: `Successfully processed ${chunks.length} chunks from ${file.name}`,
-    })
     
   } catch (error) {
     console.error('Error in upload API:', error)

@@ -1,56 +1,98 @@
-import { createClient } from '@supabase/supabase-js'
+import { Pool } from 'pg'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+})
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export { pool as db }
 
 export type Database = {
   public: {
     Tables: {
       documents: {
         Row: {
-          id: string
-          filename: string
+          id: number
+          title: string
           content: string
+          source: string | null
+          metadata: any | null
+          embedding: number[] | null
           created_at: string
+          updated_at: string
         }
         Insert: {
-          id?: string
-          filename: string
+          id?: number
+          title: string
           content: string
+          source?: string | null
+          metadata?: any | null
+          embedding?: number[] | null
           created_at?: string
+          updated_at?: string
         }
         Update: {
-          id?: string
-          filename?: string
+          id?: number
+          title?: string
           content?: string
+          source?: string | null
+          metadata?: any | null
+          embedding?: number[] | null
           created_at?: string
+          updated_at?: string
         }
       }
-      document_chunks: {
+      chat_sessions: {
         Row: {
-          id: string
-          document_id: string
+          id: number
+          session_id: string
+          user_id: string | null
+          title: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          session_id: string
+          user_id?: string | null
+          title?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          session_id?: string
+          user_id?: string | null
+          title?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      chat_messages: {
+        Row: {
+          id: number
+          session_id: string
+          role: 'user' | 'assistant'
           content: string
-          embedding: number[]
-          chunk_index: number
+          metadata: any | null
           created_at: string
         }
         Insert: {
-          id?: string
-          document_id: string
+          id?: number
+          session_id: string
+          role: 'user' | 'assistant'
           content: string
-          embedding: number[]
-          chunk_index: number
+          metadata?: any | null
           created_at?: string
         }
         Update: {
-          id?: string
-          document_id?: string
+          id?: number
+          session_id?: string
+          role?: 'user' | 'assistant'
           content?: string
-          embedding?: number[]
-          chunk_index?: number
+          metadata?: any | null
           created_at?: string
         }
       }
@@ -66,9 +108,10 @@ export type Database = {
           match_count: number
         }
         Returns: {
-          id: string
-          document_id: string
+          id: number
+          title: string
           content: string
+          source: string | null
           similarity: number
         }[]
       }
